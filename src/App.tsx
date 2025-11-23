@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import AggregatedDashboard from './pages/AggregatedDashboard';
+import Dashboard from './pages/Dashboard';
 import Statistics from './pages/Statistics';
 
 function App() {
@@ -16,7 +16,7 @@ function App() {
   }
 
   return (
-    <AggregatedDashboard
+    <Dashboard
       onNavigateToStats={() => setCurrentView('statistics')}
     />
   );
