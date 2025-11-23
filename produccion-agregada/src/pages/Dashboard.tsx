@@ -11,7 +11,7 @@ export default function Dashboard() {
   const [data, setData] = useState<AggregatedProductionData[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-
+  
   const today = new Date().toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
@@ -19,14 +19,14 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await supabase
+      const { data: productionData, error } = await supabase
         .from('aggregated_production_data')
         .select('*')
         .order('total_quantity', { ascending: false });
 
-      if (response.error) throw response.error;
+      if (error) throw error;
 
-      setData(response.data || []);
+      setData(productionData || []);
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -37,7 +37,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-
+    
     const channel = supabase
       .channel('aggregated-production-changes')
       .on(
@@ -59,7 +59,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <Header />
-
+      
       <div className="max-w-7xl mx-auto p-6">
         <DateFilter
           startDate={startDate}
