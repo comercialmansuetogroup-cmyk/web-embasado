@@ -1,146 +1,284 @@
-import { useState, useEffect } from 'react';
-import { Download, FileText, RefreshCw } from 'lucide-react';
-import { supabase, AggregatedProductionData } from '../lib/supabase';
+import { useEffect, useState } from 'react';
+import { supabase, ProductionData, AlertThreshold, ProductionHistory } from '../lib/supabase';
 import Header from '../components/Header';
-import AnimatedNumber from '../components/AnimatedNumber';
-import DateFilter from '../components/DateFilter';
-import { exportToCSV } from '../utils/exportData';
-import { exportToPDF } from '../utils/exportPDF';
+import ZoneColumn from '../components/ZoneColumn';
+import { RefreshCw, AlertCircle } from 'lucide-react';
+import { soundAlert } from '../utils/soundAlerts';
 
-export default function Dashboard() {
-  const [data, setData] = useState<AggregatedProductionData[]>([]);
+interface DashboardProps {
+  onNavigateToStats: () => void;
+}
+
+export default function Dashboard({ onNavigateToStats }: DashboardProps) {
+  const [productionData, setProductionData] = useState<ProductionData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-
+  const [thresholds, setThresholds] = useState<AlertThreshold[]>([]);
+  const [history, setHistory] = useState<ProductionHistory[]>([]);
+  const [previousDayData, setPreviousDayData] = useState<Record<string, number>>({});
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [hasNewData, setHasNewData] = useState(false);
   const today = new Date().toISOString().split('T')[0];
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
 
-  const fetchData = async () => {
+  const fetchProductionData = async () => {
     try {
-      setLoading(true);
-      const response = await supabase
-        .from('aggregated_production_data')
+      setError(null);
+
+      const { data, error: fetchError } = await supabase
+        .from('production_data')
         .select('*')
-        .order('total_quantity', { ascending: false });
+        .eq('fecha', today)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      if (response.error) throw response.error;
+      if (fetchError) {
+        throw fetchError;
+      }
 
-      setData(response.data || []);
-      setLastUpdate(new Date());
-    } catch (error) {
-      console.error('Error fetching data:', error);
+      const isNewData = data && (!productionData || new Date(data.updated_at).getTime() > new Date(lastUpdate || 0).getTime());
+
+      if (data) {
+        setProductionData({
+          fecha: data.fecha,
+          zonas: data.zonas,
+        });
+        setLastUpdate(new Date(data.updated_at));
+
+        if (isNewData && soundEnabled) {
+          setHasNewData(true);
+          soundAlert.playUpdate();
+          setTimeout(() => setHasNewData(false), 2000);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching production data:', err);
+      setError('Error al cargar los datos de producción');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
 
+  const fetchThresholds = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('alert_thresholds')
+        .select('*');
+
+      if (!error && data) {
+        setThresholds(data);
+      }
+    } catch (err) {
+      console.error('Error fetching thresholds:', err);
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('production_history')
+        .select('*')
+        .eq('date', today)
+        .order('hour', { ascending: true });
+
+      if (!error && data) {
+        setHistory(data);
+      }
+    } catch (err) {
+      console.error('Error fetching history:', err);
+    }
+  };
+
+  const fetchPreviousDayData = async () => {
+    try {
+      const previousDate = new Date(today);
+      previousDate.setDate(previousDate.getDate() - 1);
+      const prevDateStr = previousDate.toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from('production_data')
+        .select('*')
+        .eq('fecha', prevDateStr)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        const prevData: Record<string, number> = {};
+        data.zonas.forEach((zone: { nombre: string; productos: { cantidad: number }[] }) => {
+          prevData[zone.nombre] = zone.productos.reduce((sum: number, p: { cantidad: number }) => sum + p.cantidad, 0);
+        });
+        setPreviousDayData(prevData);
+      }
+    } catch (err) {
+      console.error('Error fetching previous day data:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchProductionData();
+    fetchThresholds();
+    fetchHistory();
+    fetchPreviousDayData();
+  }, []);
+
+  useEffect(() => {
+    soundAlert.setEnabled(soundEnabled);
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  useEffect(() => {
     const channel = supabase
-      .channel('aggregated-production-changes')
+      .channel('production-updates')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'aggregated_production_data' },
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'production_data',
+        },
         () => {
-          fetchData();
+          fetchProductionData();
+          fetchHistory();
         }
       )
       .subscribe();
 
+    const refreshInterval = setInterval(() => {
+      fetchProductionData();
+    }, 60000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(refreshInterval);
     };
   }, []);
 
-  const totalProduction = data.reduce((sum, item) => sum + item.total_quantity, 0);
+  const visibleZones = productionData?.zonas.filter(zone => {
+    const total = zone.productos.reduce((sum, p) => sum + p.cantidad, 0);
+    return total > 0;
+  }) || [];
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <Header />
+  const getGridColumns = (count: number) => {
+    if (count === 1) return 'grid-cols-1 max-w-3xl mx-auto';
+    if (count === 2) return 'grid-cols-2 gap-8';
+    if (count === 3) return 'grid-cols-3 gap-6';
+    return 'grid-cols-4 gap-6';
+  };
 
-      <div className="max-w-7xl mx-auto p-6">
-        <DateFilter
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-        />
 
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-slate-800">Resumen de Producción</h2>
-            <div className="flex gap-2">
-              <button
-                onClick={() => exportToCSV(data)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                <Download className="w-4 h-4" />
-                CSV
-              </button>
-              <button
-                onClick={() => exportToPDF(data)}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                <FileText className="w-4 h-4" />
-                PDF
-              </button>
-              <button
-                onClick={fetchData}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Actualizar
-              </button>
-            </div>
-          </div>
+  const getZoneThreshold = (zoneName: string) => {
+    return thresholds.find(t => t.zone_name === zoneName);
+  };
 
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-6 text-white mb-6">
-            <h3 className="text-lg font-semibold mb-2">Total Producido</h3>
-            <div className="text-4xl font-bold">
-              <AnimatedNumber value={totalProduction} />
-            </div>
-            {lastUpdate && (
-              <p className="text-sm text-blue-100 mt-2">
-                Última actualización: {lastUpdate.toLocaleTimeString('es-ES')}
-              </p>
-            )}
-          </div>
+  const getZoneHistory = (zoneName: string) => {
+    return history
+      .filter(h => h.zone_name === zoneName)
+      .reduce((acc, curr) => {
+        const hour = curr.hour || 0;
+        acc[hour] = (acc[hour] || 0) + curr.quantity;
+        return acc;
+      }, {} as Record<number, number>);
+  };
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b-2 border-slate-200">
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Descripción</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-700">Cantidad Total</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-700">Última Actualización</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                    <td className="py-3 px-4 font-medium text-slate-800">{item.description}</td>
-                    <td className="py-3 px-4 text-right text-lg font-semibold text-blue-600">
-                      {item.total_quantity.toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 text-right text-sm text-slate-600">
-                      {new Date(item.last_updated).toLocaleString('es-ES')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+  const getPreviousDayTotal = (zoneName: string) => {
+    return previousDayData[zoneName] || 0;
+  };
 
-          {data.length === 0 && !loading && (
-            <div className="text-center py-12 text-slate-500">
-              No hay datos de producción disponibles
-            </div>
-          )}
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="w-16 h-16 text-[#bd2025] animate-spin mx-auto mb-4" />
+          <p className="text-2xl font-semibold text-gray-700">Cargando datos de producción...</p>
         </div>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-16 h-16 text-[#bd2025] mx-auto mb-4" />
+          <p className="text-2xl font-semibold text-gray-700 mb-2">{error}</p>
+          <button
+            onClick={fetchProductionData}
+            className="mt-4 px-6 py-3 bg-[#bd2025] text-white rounded-lg font-semibold hover:bg-[#8c1619] transition-colors"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!productionData || visibleZones.length === 0) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col">
+        <Header
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode(!darkMode)}
+          onNavigateToStats={onNavigateToStats}
+          showControls={true}
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-2xl font-semibold text-gray-600">
+              No hay datos de producción disponibles
+            </p>
+            <p className="text-gray-500 mt-2">
+              Esperando datos desde Make.com...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen flex flex-col transition-colors duration-300 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <Header
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode(!darkMode)}
+        onNavigateToStats={onNavigateToStats}
+        showControls={true}
+      />
+
+      <main className="flex-1 px-8 py-4">
+        <div className={`grid ${getGridColumns(visibleZones.length)} h-full gap-6`}>
+          {visibleZones.map((zone) => (
+            <ZoneColumn
+              key={zone.nombre}
+              zone={zone}
+              columnCount={visibleZones.length}
+              threshold={getZoneThreshold(zone.nombre)}
+              history={getZoneHistory(zone.nombre)}
+              previousDayTotal={getPreviousDayTotal(zone.nombre)}
+              darkMode={darkMode}
+            />
+          ))}
+        </div>
+      </main>
+
+      {lastUpdate && (
+        <footer className={`py-3 px-8 border-t ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'}`}>
+          <p className={`text-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            Última actualización: {lastUpdate.toLocaleString('es-ES')}
+          </p>
+        </footer>
+      )}
     </div>
   );
 }

@@ -49,3 +49,10 @@ export interface AlertThreshold {
   created_at: string;
   updated_at: string;
 }
+
+export interface AggregatedProductionData {
+  id: number;
+  description: string;
+  total_quantity: number;
+  last_updated: string;
+}
