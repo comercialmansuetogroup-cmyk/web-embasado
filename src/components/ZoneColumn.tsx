@@ -47,7 +47,7 @@ export default function ZoneColumn({
       productsByCode[product.codigo].cantidad += product.cantidad;
     } else {
       productsByCode[product.codigo] = {
-        nombre: product.nombre,
+        nombre: product.nombre || product.codigo,
         cantidad: product.cantidad
       };
     }
@@ -60,8 +60,8 @@ export default function ZoneColumn({
       cantidad: data.cantidad
     }))
     .sort((a, b) => {
-      const displayA = displayConfig.showProductCode ? a.codigo : a.nombre;
-      const displayB = displayConfig.showProductCode ? b.codigo : b.nombre;
+      const displayA = displayConfig.showProductCode ? a.codigo : (a.nombre || a.codigo);
+      const displayB = displayConfig.showProductCode ? b.codigo : (b.nombre || b.codigo);
       return displayA.localeCompare(displayB);
     });
 
@@ -123,7 +123,7 @@ export default function ZoneColumn({
                 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'} truncate flex-1`}
                 style={{ fontSize: '18px', lineHeight: '1.2' }}
               >
-                {displayConfig.showProductCode ? product.codigo : product.nombre}
+                {displayConfig.showProductCode ? product.codigo : (product.nombre || product.codigo)}
               </span>
               <AnimatedNumber
                 value={product.cantidad}
