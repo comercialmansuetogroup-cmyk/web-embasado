@@ -7,6 +7,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export interface ProductData {
   codigo: string;
+  nombre: string;
   cantidad: number;
 }
 

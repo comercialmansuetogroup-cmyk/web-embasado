@@ -2,7 +2,6 @@ import { Package, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { ZoneData, AlertThreshold } from '../lib/supabase';
 import AnimatedNumber from './AnimatedNumber';
 import { getZoneColor } from '../utils/zoneColors';
-import { getProductName } from '../utils/productNames';
 
 interface ZoneColumnProps {
   zone: ZoneData;
@@ -41,20 +40,23 @@ export default function ZoneColumn({
     return null;
   }
 
-  const productsByCode: Record<string, number> = {};
+  const productsByCode: Record<string, { nombre: string; cantidad: number }> = {};
   zone.productos.forEach((product) => {
     if (productsByCode[product.codigo]) {
-      productsByCode[product.codigo] += product.cantidad;
+      productsByCode[product.codigo].cantidad += product.cantidad;
     } else {
-      productsByCode[product.codigo] = product.cantidad;
+      productsByCode[product.codigo] = {
+        nombre: product.nombre,
+        cantidad: product.cantidad
+      };
     }
   });
 
   const sortedProducts = Object.entries(productsByCode)
-    .map(([codigo, cantidad]) => ({
+    .map(([codigo, data]) => ({
       codigo,
-      nombre: getProductName(codigo),
-      cantidad
+      nombre: data.nombre,
+      cantidad: data.cantidad
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
 
