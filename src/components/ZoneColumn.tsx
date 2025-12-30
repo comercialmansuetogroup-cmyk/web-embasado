@@ -2,6 +2,7 @@ import { Package, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { ZoneData, AlertThreshold } from '../lib/supabase';
 import AnimatedNumber from './AnimatedNumber';
 import { getZoneColor } from '../utils/zoneColors';
+import { displayConfig } from '../config/displayConfig';
 
 interface ZoneColumnProps {
   zone: ZoneData;
@@ -58,7 +59,11 @@ export default function ZoneColumn({
       nombre: data.nombre,
       cantidad: data.cantidad
     }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    .sort((a, b) => {
+      const displayA = displayConfig.showProductCode ? a.codigo : a.nombre;
+      const displayB = displayConfig.showProductCode ? b.codigo : b.nombre;
+      return displayA.localeCompare(displayB);
+    });
 
   return (
     <div className={`rounded-xl shadow-xl border-2 overflow-hidden flex flex-col h-full ${
@@ -118,7 +123,7 @@ export default function ZoneColumn({
                 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'} truncate flex-1`}
                 style={{ fontSize: '18px', lineHeight: '1.2' }}
               >
-                {product.nombre}
+                {displayConfig.showProductCode ? product.codigo : product.nombre}
               </span>
               <AnimatedNumber
                 value={product.cantidad}

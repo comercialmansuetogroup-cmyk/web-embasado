@@ -9,6 +9,7 @@ const corsHeaders = {
 
 interface Producto {
   codigo: string;
+  nombre: string;
   cantidad: number;
 }
 
@@ -19,6 +20,7 @@ interface Zona {
 
 interface IncomingProducto {
   codigo: string;
+  nombre_producto: string;
   cantidad: number;
 }
 
@@ -44,7 +46,7 @@ function mapAgentCodeToZone(agentCode: string): string {
 }
 
 function transformIncomingData(incomingZonas: IncomingZona[]): Zona[] {
-  const grouped: Record<string, Record<string, number>> = {};
+  const grouped: Record<string, Record<string, { nombre: string; cantidad: number }>> = {};
 
   incomingZonas.forEach((incomingZona) => {
     const zoneName = mapAgentCodeToZone(incomingZona.codigo_agente);
@@ -55,9 +57,12 @@ function transformIncomingData(incomingZonas: IncomingZona[]): Zona[] {
 
     incomingZona.productos.forEach((producto) => {
       if (!grouped[zoneName][producto.codigo]) {
-        grouped[zoneName][producto.codigo] = 0;
+        grouped[zoneName][producto.codigo] = {
+          nombre: producto.nombre_producto,
+          cantidad: 0
+        };
       }
-      grouped[zoneName][producto.codigo] += producto.cantidad;
+      grouped[zoneName][producto.codigo].cantidad += producto.cantidad;
     });
   });
 
@@ -65,7 +70,8 @@ function transformIncomingData(incomingZonas: IncomingZona[]): Zona[] {
     nombre: zoneName,
     productos: Object.keys(grouped[zoneName]).map((codigo) => ({
       codigo,
-      cantidad: grouped[zoneName][codigo]
+      nombre: grouped[zoneName][codigo].nombre,
+      cantidad: grouped[zoneName][codigo].cantidad
     }))
   }));
 }
@@ -93,6 +99,7 @@ function mergeZones(existingZones: Zona[], newZones: Zona[]): Zona[] {
           mergedZones[existingZoneIndex].productos.push(newProduct);
         } else {
           mergedZones[existingZoneIndex].productos[existingProductIndex].cantidad = newProduct.cantidad;
+          mergedZones[existingZoneIndex].productos[existingProductIndex].nombre = newProduct.nombre;
         }
       });
     }
