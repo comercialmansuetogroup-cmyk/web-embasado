@@ -48,17 +48,16 @@ function transformIncomingData(incomingZonas: IncomingZona[]): Zona[] {
 
   incomingZonas.forEach((incomingZona) => {
     const zoneName = mapAgentCodeToZone(incomingZona.codigo_agente);
-    const productCode = incomingZona.nombre;
 
     if (!grouped[zoneName]) {
       grouped[zoneName] = {};
     }
 
     incomingZona.productos.forEach((producto) => {
-      if (!grouped[zoneName][productCode]) {
-        grouped[zoneName][productCode] = 0;
+      if (!grouped[zoneName][producto.codigo]) {
+        grouped[zoneName][producto.codigo] = 0;
       }
-      grouped[zoneName][productCode] += producto.cantidad;
+      grouped[zoneName][producto.codigo] += producto.cantidad;
     });
   });
 
