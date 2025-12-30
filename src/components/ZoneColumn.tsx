@@ -49,11 +49,33 @@ export default function ZoneColumn({
 
   const sortedProducts = Object.entries(productsByCode).sort(([a], [b]) => a.localeCompare(b));
 
-  const getFontSize = () => {
+  const getNumberSize = () => {
     if (columnCount === 1) return 'text-7xl';
     if (columnCount === 2) return 'text-6xl';
     if (columnCount === 3) return 'text-5xl';
     return 'text-4xl';
+  };
+
+  const getProductNameSize = (name: string) => {
+    const length = name.length;
+    if (columnCount === 1) {
+      if (length > 40) return 'text-xl';
+      if (length > 30) return 'text-2xl';
+      return 'text-3xl';
+    }
+    if (columnCount === 2) {
+      if (length > 35) return 'text-lg';
+      if (length > 25) return 'text-xl';
+      return 'text-2xl';
+    }
+    if (columnCount === 3) {
+      if (length > 30) return 'text-base';
+      if (length > 20) return 'text-lg';
+      return 'text-xl';
+    }
+    if (length > 25) return 'text-sm';
+    if (length > 20) return 'text-base';
+    return 'text-lg';
   };
 
   const getTitleSize = () => {
@@ -103,22 +125,22 @@ export default function ZoneColumn({
           </div>
         )}
 
-        <div className="space-y-2 flex-1">
+        <div className="space-y-2 flex-1 overflow-y-auto">
           {sortedProducts.map(([codigo, cantidad]) => (
             <div
               key={codigo}
-              className={`flex justify-between items-center py-3 px-4 rounded-lg border-2 hover:scale-102 transition-all ${
+              className={`flex justify-between items-center gap-6 py-3 px-4 rounded-lg border-2 hover:scale-102 transition-all ${
                 darkMode
                   ? 'bg-gray-700 border-gray-600 hover:bg-gray-600'
                   : zoneColor.light + ' ' + zoneColor.border + ' hover:bg-opacity-80'
               }`}
             >
-              <span className={`${getFontSize()} font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+              <span className={`${getProductNameSize(codigo)} font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} line-clamp-1 flex-1`}>
                 {codigo}
               </span>
               <AnimatedNumber
                 value={cantidad}
-                className={`${getFontSize()} font-extrabold ${zoneColor.text}`}
+                className={`${getNumberSize()} font-extrabold ${zoneColor.text} flex-shrink-0`}
               />
             </div>
           ))}
@@ -126,12 +148,12 @@ export default function ZoneColumn({
 
         <div className={`mt-4 pt-4 border-t-4 ${darkMode ? 'border-gray-600' : 'border-gray-300'}`}>
           <div className={`flex justify-between items-center py-4 px-4 bg-gradient-to-r ${zoneColor.gradient} rounded-xl shadow-lg relative overflow-hidden`}>
-            <span className={`${getFontSize()} font-bold text-white uppercase tracking-wide relative z-10`}>
+            <span className={`${getNumberSize()} font-bold text-white uppercase tracking-wide relative z-10`}>
               Total
             </span>
             <AnimatedNumber
               value={totalQuantity}
-              className={`${getFontSize()} font-extrabold text-white relative z-10`}
+              className={`${getNumberSize()} font-extrabold text-white relative z-10`}
             />
           </div>
           {isBelowThreshold && (

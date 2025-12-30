@@ -248,7 +248,7 @@ export default function Dashboard({ onNavigateToStats }: DashboardProps) {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col transition-colors duration-300 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`h-screen flex flex-col transition-colors duration-300 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       <Header
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode(!darkMode)}
@@ -256,7 +256,7 @@ export default function Dashboard({ onNavigateToStats }: DashboardProps) {
         showControls={true}
       />
 
-      <main className="flex-1 px-8 py-4">
+      <main className="flex-1 px-8 py-6 overflow-hidden">
         <div className={`grid ${getGridColumns(visibleZones.length)} h-full gap-6`}>
           {visibleZones.map((zone) => (
             <ZoneColumn
