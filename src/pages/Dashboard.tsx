@@ -247,6 +247,14 @@ export default function Dashboard({ onNavigateToStats }: DashboardProps) {
     );
   }
 
+  // Calcular el número máximo de productos únicos entre todas las zonas
+  const maxProductCount = Math.max(
+    ...visibleZones.map((zone) => {
+      const uniqueProducts = new Set(zone.productos.map(p => p.codigo));
+      return uniqueProducts.size;
+    })
+  );
+
   return (
     <div className={`h-screen flex flex-col transition-colors duration-300 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       <Header
@@ -256,8 +264,8 @@ export default function Dashboard({ onNavigateToStats }: DashboardProps) {
         showControls={true}
       />
 
-      <main className="flex-1 px-8 py-6 overflow-hidden">
-        <div className={`grid ${getGridColumns(visibleZones.length)} h-full gap-6`}>
+      <main className="flex-1 px-4 py-3 overflow-hidden">
+        <div className={`grid ${getGridColumns(visibleZones.length)} h-full gap-4`}>
           {visibleZones.map((zone) => (
             <ZoneColumn
               key={zone.nombre}
@@ -267,6 +275,7 @@ export default function Dashboard({ onNavigateToStats }: DashboardProps) {
               history={getZoneHistory(zone.nombre)}
               previousDayTotal={getPreviousDayTotal(zone.nombre)}
               darkMode={darkMode}
+              totalProductCount={maxProductCount}
             />
           ))}
         </div>

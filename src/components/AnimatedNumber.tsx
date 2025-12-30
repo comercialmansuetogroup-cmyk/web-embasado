@@ -1,12 +1,13 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, CSSProperties } from 'react';
 
 interface AnimatedNumberProps {
   value: number;
   className?: string;
   duration?: number;
+  style?: CSSProperties;
 }
 
-export default function AnimatedNumber({ value, className = '', duration = 1000 }: AnimatedNumberProps) {
+export default function AnimatedNumber({ value, className = '', duration = 1000, style }: AnimatedNumberProps) {
   const [displayValue, setDisplayValue] = useState(value);
   const [isAnimating, setIsAnimating] = useState(false);
   const previousValue = useRef(value);
@@ -43,6 +44,7 @@ export default function AnimatedNumber({ value, className = '', duration = 1000 
   return (
     <span
       className={`${className} ${isAnimating ? 'transition-all duration-300 scale-110' : ''}`}
+      style={style}
     >
       {displayValue}
     </span>
