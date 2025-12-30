@@ -17,35 +17,67 @@ interface Zona {
   productos: Producto[];
 }
 
-const ZONE_MAPPING: Record<string, string> = {
-  "COMERCIAL ZONA NORTE": "GRAN CANARIA",
-  "COMERCIAL ZONA SUR": "GRAN CANARIA",
-  "WEB": "GRAN CANARIA",
-  "OFICINA": "GRAN CANARIA",
-  "DELEGACIÓN TENERIFE NORTE": "TENERIFE",
-  "DELEGACIÓN TENERIFE SUR": "PINGUINO",
-  "COMERCIAL LANZAROTE": "FILIPPO",
-  "DELEGACIÓN LA PALMA": "LA PALMA",
+interface IncomingProducto {
+  codigo: string;
+  cantidad: number;
+}
+
+interface IncomingZona {
+  nombre: string;
+  codigo_agente: string;
+  nombre_agente: string;
+  productos: IncomingProducto[];
+}
+
+const AGENT_CODE_TO_ZONE: Record<string, string> = {
+  "5": "GRAN CANARIA",
+  "10": "GRAN CANARIA",
+  "14": "GRAN CANARIA",
+  "15": "TENERIFE NORTE",
+  "23": "INSÓLITO",
+  "24": "FILIPPO",
+  "26": "PINGÜINO",
 };
 
-function normalizeZoneName(zoneName: string): string {
-  const upperZoneName = zoneName.trim().toUpperCase();
-  return ZONE_MAPPING[upperZoneName] || zoneName;
+function mapAgentCodeToZone(agentCode: string): string {
+  return AGENT_CODE_TO_ZONE[agentCode] || `AGENTE_${agentCode}`;
+}
+
+function transformIncomingData(incomingZonas: IncomingZona[]): Zona[] {
+  const grouped: Record<string, Producto[]> = {};
+
+  incomingZonas.forEach((incomingZona) => {
+    const zoneName = mapAgentCodeToZone(incomingZona.codigo_agente);
+
+    if (!grouped[zoneName]) {
+      grouped[zoneName] = [];
+    }
+
+    incomingZona.productos.forEach((producto) => {
+      grouped[zoneName].push({
+        codigo: incomingZona.nombre,
+        cantidad: producto.cantidad
+      });
+    });
+  });
+
+  return Object.keys(grouped).map((nombre) => ({
+    nombre,
+    productos: grouped[nombre]
+  }));
 }
 
 function mergeZones(existingZones: Zona[], newZones: Zona[]): Zona[] {
   const mergedZones: Zona[] = JSON.parse(JSON.stringify(existingZones));
 
   newZones.forEach((newZone) => {
-    const normalizedName = normalizeZoneName(newZone.nombre);
-
     const existingZoneIndex = mergedZones.findIndex(
-      (z) => z.nombre === normalizedName
+      (z) => z.nombre === newZone.nombre
     );
 
     if (existingZoneIndex === -1) {
       mergedZones.push({
-        nombre: normalizedName,
+        nombre: newZone.nombre,
         productos: newZone.productos
       });
     } else {
@@ -92,9 +124,9 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const productionData = await req.json();
+    const incomingData = await req.json();
 
-    if (!productionData.zonas || !Array.isArray(productionData.zonas)) {
+    if (!incomingData.zonas || !Array.isArray(incomingData.zonas)) {
       return new Response(
         JSON.stringify({ error: "Invalid data format. Expected 'zonas' array with production data." }),
         {
@@ -106,6 +138,8 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    const transformedZones = transformIncomingData(incomingData.zonas);
 
     const today = new Date().toISOString().split('T')[0];
     const currentHour = new Date().getHours();
@@ -134,7 +168,7 @@ Deno.serve(async (req: Request) => {
     let upsertData: any;
 
     if (existingData) {
-      finalZones = mergeZones(existingData.zonas as Zona[], productionData.zonas);
+      finalZones = mergeZones(existingData.zonas as Zona[], transformedZones);
 
       const { data: updatedData, error: updateError } = await supabase
         .from("production_data")
@@ -162,23 +196,7 @@ Deno.serve(async (req: Request) => {
 
       upsertData = updatedData;
     } else {
-      const normalizedZones = productionData.zonas.map((zona: Zona) => ({
-        nombre: normalizeZoneName(zona.nombre),
-        productos: zona.productos
-      }));
-
-      const grouped: Record<string, Producto[]> = {};
-      normalizedZones.forEach((zona: Zona) => {
-        if (!grouped[zona.nombre]) {
-          grouped[zona.nombre] = [];
-        }
-        grouped[zona.nombre].push(...zona.productos);
-      });
-
-      finalZones = Object.keys(grouped).map((nombre) => ({
-        nombre,
-        productos: grouped[nombre]
-      }));
+      finalZones = transformedZones;
 
       const { data: insertedData, error: insertError } = await supabase
         .from("production_data")
@@ -209,13 +227,12 @@ Deno.serve(async (req: Request) => {
 
     const historyPromises: Promise<any>[] = [];
 
-    productionData.zonas.forEach((zona: Zona) => {
-      const normalizedZoneName = normalizeZoneName(zona.nombre);
+    transformedZones.forEach((zona: Zona) => {
       zona.productos.forEach((producto: Producto) => {
         historyPromises.push(
           supabase.from("production_history").insert({
             date: today,
-            zone_name: normalizedZoneName,
+            zone_name: zona.nombre,
             product_code: producto.codigo,
             quantity: producto.cantidad,
             hour: currentHour,
