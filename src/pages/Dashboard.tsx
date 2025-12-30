@@ -143,16 +143,19 @@ export default function Dashboard({ onNavigateToStats }: DashboardProps) {
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'production_data',
         },
-        () => {
+        (payload) => {
+          console.log('Realtime update received:', payload);
           fetchProductionData();
           fetchHistory();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
 
     const refreshInterval = setInterval(() => {
       fetchProductionData();
