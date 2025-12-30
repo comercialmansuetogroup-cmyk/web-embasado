@@ -44,26 +44,30 @@ function mapAgentCodeToZone(agentCode: string): string {
 }
 
 function transformIncomingData(incomingZonas: IncomingZona[]): Zona[] {
-  const grouped: Record<string, Producto[]> = {};
+  const grouped: Record<string, Record<string, number>> = {};
 
   incomingZonas.forEach((incomingZona) => {
     const zoneName = mapAgentCodeToZone(incomingZona.codigo_agente);
+    const productCode = incomingZona.nombre;
 
     if (!grouped[zoneName]) {
-      grouped[zoneName] = [];
+      grouped[zoneName] = {};
     }
 
     incomingZona.productos.forEach((producto) => {
-      grouped[zoneName].push({
-        codigo: incomingZona.nombre,
-        cantidad: producto.cantidad
-      });
+      if (!grouped[zoneName][productCode]) {
+        grouped[zoneName][productCode] = 0;
+      }
+      grouped[zoneName][productCode] += producto.cantidad;
     });
   });
 
-  return Object.keys(grouped).map((nombre) => ({
-    nombre,
-    productos: grouped[nombre]
+  return Object.keys(grouped).map((zoneName) => ({
+    nombre: zoneName,
+    productos: Object.keys(grouped[zoneName]).map((codigo) => ({
+      codigo,
+      cantidad: grouped[zoneName][codigo]
+    }))
   }));
 }
 
