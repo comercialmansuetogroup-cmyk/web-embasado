@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const VALID_API_KEY = "DASHBOARD_V3_KEY_2025";
+
 interface Producto {
   codigo: string;
   nombre: string;
@@ -19,9 +21,10 @@ interface Zona {
 }
 
 interface IncomingProducto {
-  codigo: string;
-  nombre_producto: string;
+  codigo?: string;
+  nombre_producto?: string;
   cantidad: number;
+  stock_fisico?: number;
 }
 
 interface IncomingZona {
@@ -56,13 +59,21 @@ function transformIncomingData(incomingZonas: IncomingZona[]): Zona[] {
     }
 
     incomingZona.productos.forEach((producto) => {
-      if (!grouped[zoneName][producto.codigo]) {
-        grouped[zoneName][producto.codigo] = {
-          nombre: producto.nombre_producto,
+      const productCode = producto.codigo || `PROD_${Date.now()}`;
+      const productName = producto.nombre_producto || "Producto sin nombre";
+
+      if (!productCode || productCode.trim() === "") {
+        console.warn("Producto sin código, usando timestamp:", productCode);
+        return;
+      }
+
+      if (!grouped[zoneName][productCode]) {
+        grouped[zoneName][productCode] = {
+          nombre: productName,
           cantidad: 0
         };
       }
-      grouped[zoneName][producto.codigo].cantidad += producto.cantidad;
+      grouped[zoneName][productCode].cantidad += producto.cantidad;
     });
   });
 
@@ -122,6 +133,34 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "Method not allowed" }),
         {
           status: 405,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
+        {
+          status: 401,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    if (token !== VALID_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "Invalid API key" }),
+        {
+          status: 401,
           headers: {
             ...corsHeaders,
             "Content-Type": "application/json",

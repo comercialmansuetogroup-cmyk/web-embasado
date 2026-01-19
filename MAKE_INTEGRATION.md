@@ -1,6 +1,6 @@
-# Integración con Make.com
+# Configuración de Make.com - Dashboard de Producción
 
-## URL del Webhook
+## URL del Endpoint
 
 ```
 https://mmhwjrnqolbndwqtjfex.supabase.co/functions/v1/update-production
@@ -14,11 +14,10 @@ https://mmhwjrnqolbndwqtjfex.supabase.co/functions/v1/update-production
 
 **URL:** `https://mmhwjrnqolbndwqtjfex.supabase.co/functions/v1/update-production`
 
-**Headers:**
-```
-Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1taHdqcm5xb2xibmR3cXRqZmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzMzY2MzYsImV4cCI6MjA3NzkxMjYzNn0.vbv15vuMhzxV83bmVMEgLH1vtEQAyKoHDz5GcTDkkz8
-```
+**Headers (Agregar 2 headers):**
+
+1. **Content-Type:** `application/json`
+2. **Authorization:** `Bearer DASHBOARD_V3_KEY_2025`
 
 **Body Type:** Raw
 
@@ -29,24 +28,15 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 {
   "zonas": [
     {
-      "nombre": "ISLA 1",
+      "nombre": "{{8.nombre_comercial}}",
+      "codigo_agente": "{{8.codigo_agente}}",
+      "nombre_agente": "{{8.nombre_comercial}}",
       "productos": [
         {
-          "codigo": "A001",
-          "cantidad": 150
-        },
-        {
-          "codigo": "A002",
-          "cantidad": 200
-        }
-      ]
-    },
-    {
-      "nombre": "ISLA 2",
-      "productos": [
-        {
-          "codigo": "B001",
-          "cantidad": 180
+          "codigo": "{{8.codigo_producto}}",
+          "nombre_producto": "{{8.nombre_producto}}",
+          "cantidad": {{8.cantidad_producto}},
+          "stock_fisico": {{8.stock_fisico}}
         }
       ]
     }
@@ -54,35 +44,90 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 }
 ```
 
-## Notas Importantes
+### Mapeo de Códigos de Agente a Zonas
 
-1. **NO necesitas enviar la fecha** - El sistema automáticamente asigna la fecha de HOY a todos los datos recibidos
-2. **Formato de datos:** El campo `zonas` es obligatorio y debe ser un array de zonas con sus productos
-3. **Estructura de zona:**
-   - `nombre`: Nombre de la isla (ej: "ISLA 1", "ISLA 2", etc.)
-   - `productos`: Array de productos con `codigo` y `cantidad`
-4. **Histórico automático:** Cada vez que se reciben datos, se guarda automáticamente en el histórico con la hora actual
-5. **Actualizaciones en tiempo real:** El panel principal se actualiza automáticamente cuando se reciben nuevos datos
+El sistema convierte automáticamente los códigos de agente:
 
-## Ejemplo de Respuesta Exitosa
+| Código Agente | Zona en Dashboard |
+|---------------|-------------------|
+| 5             | GRAN CANARIA      |
+| 10            | GRAN CANARIA      |
+| 14            | GRAN CANARIA      |
+| 15            | TENERIFE NORTE    |
+| 23            | INSÓLITO          |
+| 24            | FILIPPO           |
+| 26            | PINGÜINO          |
+| Otros         | AGENTE_{codigo}   |
 
+## Campos del JSON
+
+### Por cada zona:
+- `nombre` (string, opcional): Se sobrescribe con el mapeo de codigo_agente
+- `codigo_agente` (string, requerido): Código del agente para mapear a zona
+- `nombre_agente` (string, opcional): Nombre del agente
+- `productos` (array, requerido): Lista de productos
+
+### Por cada producto:
+- `codigo` (string, requerido): Código del producto
+- `nombre_producto` (string, opcional): Nombre del producto
+- `cantidad` (number, requerido): Cantidad del producto
+- `stock_fisico` (number, opcional): Stock físico (informativo)
+
+## Ejemplo de Prueba con cURL
+
+```bash
+curl -X POST https://mmhwjrnqolbndwqtjfex.supabase.co/functions/v1/update-production \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer DASHBOARD_V3_KEY_2025" \
+  -d '{
+    "zonas": [
+      {
+        "nombre": "Gran Canaria",
+        "codigo_agente": "5",
+        "nombre_agente": "Gran Canaria",
+        "productos": [
+          {
+            "codigo": "MOZ25",
+            "nombre_producto": "MOZZARELLA 3KG",
+            "cantidad": 10,
+            "stock_fisico": 50
+          }
+        ]
+      }
+    ]
+  }'
+```
+
+## Respuestas del Sistema
+
+### Éxito (200):
 ```json
 {
   "success": true,
-  "data": {
-    "id": "uuid-generado",
-    "fecha": "2025-11-05",
-    "zonas": [...],
-    "created_at": "2025-11-05T10:30:00Z",
-    "updated_at": "2025-11-05T10:30:00Z"
-  }
+  "data": {...},
+  "message": "Production data created successfully"
 }
 ```
 
-## Ejemplo de Respuesta con Error
-
+### Error 401 - Sin autorización:
 ```json
 {
-  "error": "Invalid data format. Expected 'zonas' field with production data."
+  "error": "Invalid API key"
 }
 ```
+
+### Error 400 - Formato inválido:
+```json
+{
+  "error": "Invalid data format. Expected 'zonas' array with production data."
+}
+```
+
+## Notas Importantes
+
+1. **Token obligatorio:** El header Authorization debe ser exactamente `Bearer DASHBOARD_V3_KEY_2025`
+2. **Código de producto:** Si el campo `codigo` está vacío, se genera uno automático (no recomendado)
+3. **Mapeo automático:** Los códigos de agente se convierten a zonas según la tabla de mapeo
+4. **Fecha automática:** El sistema asigna la fecha actual a todos los datos
+5. **Actualización en tiempo real:** El dashboard se actualiza automáticamente sin recargar
+6. **Merge de datos:** Si ya existen datos del día, los productos se combinan (reemplaza cantidades existentes)
